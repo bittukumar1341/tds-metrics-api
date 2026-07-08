@@ -5,6 +5,11 @@ from fastapi import Request
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 
+import jwt
+
+from pydantic import BaseModel
+from fastapi import HTTPException
+
 app = FastAPI()
 
 app.add_middleware(
@@ -35,6 +40,11 @@ def home():
         "message": "Metrics API is running"
     }
 
+class TokenRequest(BaseModel):
+    token: str
+
+with open("public_key.pem", "r") as f:
+    PUBLIC_KEY = f.read()
 
 @app.get("/stats")
 def get_stats(values: str = Query(...)):
@@ -48,3 +58,26 @@ def get_stats(values: str = Query(...)):
         "max": max(nums),
         "mean": sum(nums) / len(nums)
     }
+@app.post("/verify")
+def verify_token(data: TokenRequest):
+    try:
+        payload = jwt.decode(
+            data.token,
+            PUBLIC_KEY,
+            algorithms=["RS256"],
+            issuer="https://idp.exam.local",
+            audience="tds-no1cqrmm.apps.exam.local",
+        )
+
+        return {
+            "valid": True,
+            "email": payload["email"],
+            "sub": payload["sub"],
+            "aud": payload["aud"],
+        }
+
+    except jwt.PyJWTError:
+        raise HTTPException(
+            status_code=401,
+            detail={"valid": False},
+        )
